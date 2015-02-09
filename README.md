@@ -6,9 +6,13 @@ Just run Viviparidae on your working directory. And Viviparidae make a temporary
 
 For all that, you can still use a original branches.
 
+
+### How do it use
+
+Just run Viviparidae on your working directory like next commands.
+
     cd /path/to/your/wroking/directory
     python /path/to/viviparidae.py
-
 
 
 ### How do it work
