@@ -39,9 +39,7 @@ class GitFileChecker(PatternMatchingEventHandler):
     self._repo = Repo('.') if repo is None else repo
     self._commit = False
 
-    self._files = []
-    for file_name, v in self._repo.index.entries.keys():
-      self._files.append(file_name)
+    self._files = [file_name for file_name, v in self._repo.index.entries.keys()]
     print 'Follow these files:'
     print '\t'.join(self._files), '\n'
 
@@ -92,7 +90,10 @@ class GitFileChecker(PatternMatchingEventHandler):
 
   def commit(self):
     while(self._commit):
-      pass
+      try:
+        time.sleep(0.1)
+      except:
+        pass
     self._commit = True
     if len(self._events) == 0:
       self._commit = False
@@ -113,6 +114,9 @@ class GitFileChecker(PatternMatchingEventHandler):
           self._files.append(event.src_path)
         add_files.append(event.src_path)
         commit_msg = commit_msg + str(event.event_type) + ': ' + event.src_path + '\n'
+    if len(commit_msg) == 0:
+      self._commit = False
+      return
     
     last_commit = self._repo.head.commit
     if len(add_files) > 0:
@@ -157,7 +161,10 @@ class GitCommitChecker(FileSystemEventHandler):
     self._events.append(event)
     def _event_checker():
       while(self._event_checking):
-        pass
+        try:
+          time.sleep(0.1)
+        except:
+          pass
       self._event_checking = True
       if len(self._events) == 0:
         self._event_checking = False
