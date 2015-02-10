@@ -10,20 +10,21 @@ For all that, you can still use a original branches.
 ### How do it use
 
 Just run Viviparidae on your working directory like next commands.
+I recommend using background processing.
 
     cd /path/to/your/wroking/directory
-    python /path/to/viviparidae.py
+    python /path/to/viviparidae.py >> /path/to/viviparidae.log~ &
 
 
 ### How do it work
 
 Viviparidae monitoring your working directory, and find all changes include create and delete.
 
-If found some change, first of all, Viviparidae memorize a last commit in your working branch. - Let it A.
+If found some change, first of all, Viviparidae staging all changes in your working branch.
 
-Next, Viviparidae make new temporary branch - if it isn't a first commit of this branch, it just checkout to the branch and commit everything.
+And Viviparidae make new temporary branch - if it isn't a first commit of this branch, it just checkout to the branch and commit everything.
 
-Finally it return to A, reset to your original head with "git reset --mixed".
+Finally it return to your working branch.
 
 So, your all works is saved in Viviparidae branch and staged in your branch.
 
