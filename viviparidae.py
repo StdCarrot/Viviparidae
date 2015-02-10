@@ -5,11 +5,30 @@ import time
 import random
 import string
 import traceback
-from threading import Timer
+import threading
+from threading import Timer, Semaphore
 from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 from watchdog.events import FileSystemEventHandler
 from git import Repo
+
+
+_git_semaphore = Semaphore(1)
+
+def use_git(func):
+  def check_semaphore(self=None, *args, **kwargs):
+    _git_semaphore.acquire()
+    result = None
+    try:
+      if self:
+        result = func(self, *args, **kwargs)
+      else:
+        result = func(*args, **kwargs)
+    except:
+      print traceback.format_exc()
+    _git_semaphore.release()
+    return result
+  return check_semaphore
 
 
 class GitFileChecker(PatternMatchingEventHandler):
@@ -37,7 +56,6 @@ class GitFileChecker(PatternMatchingEventHandler):
       pass
 
     self._repo = Repo('.') if repo is None else repo
-    self._commit = False
 
     self._files = [file_name for file_name, v in self._repo.index.entries.keys()]
     print 'Follow these files:'
@@ -50,6 +68,7 @@ class GitFileChecker(PatternMatchingEventHandler):
       self._branch_name = self._branch_name + '_new'
       return self.make_new_branch()
 
+  @use_git
   def reset_vivi_branch(self):
     self._repo.delete_head([self._vivi_branch], force=True)
     self._vivi_branch = None
@@ -84,28 +103,20 @@ class GitFileChecker(PatternMatchingEventHandler):
       except:
         print 'Failed to commit'
         print traceback.format_exc()
-        self._commit = False
     
     Timer(self._check_interval, _event_checker, args=[event.src_path]).start()
 
+  @use_git
   def commit(self):
-    while(self._commit):
-      try:
-        time.sleep(0.1)
-      except:
-        pass
-    self._commit = True
     if len(self._events) == 0:
-      self._commit = False
       return
-
     add_files = []
     removed_files = []
     commit_msg = ''
     keys = self._events.keys()
     for key in keys:
       event = self._events.pop(key)
-      if event.event_type == 'deleted' and event._src_path in self._files:
+      if event.event_type == 'deleted' and event.src_path in self._files:
         removed_files.append(event.src_path)
         self._files.remove(event.src_path)
         commit_msg = commit_msg + str(event.event_type) + ': ' + event.src_path + '\n'
@@ -115,7 +126,6 @@ class GitFileChecker(PatternMatchingEventHandler):
         add_files.append(event.src_path)
         commit_msg = commit_msg + str(event.event_type) + ': ' + event.src_path + '\n'
     if len(commit_msg) == 0:
-      self._commit = False
       return
     
     last_commit = self._repo.head.commit
@@ -123,7 +133,6 @@ class GitFileChecker(PatternMatchingEventHandler):
       self._repo.index.add(add_files)
     if len(removed_files) > 0:
       self._repo.index.remove(removed_files)
-    self._repo.index.commit('vivi temp commit')
 
     if self._vivi_branch is None:
       self._vivi_branch = self.make_new_branch()
@@ -139,11 +148,8 @@ class GitFileChecker(PatternMatchingEventHandler):
       self._repo.index.commit(commit_msg)
       self._repo.head.reference = original_branch
 
-    self._repo.head.reset(last_commit)
-
     print self._vivi_branch.commit.name_rev
     print commit_msg
-    self._commit = False
 
 
 class GitCommitChecker(FileSystemEventHandler):
@@ -152,34 +158,26 @@ class GitCommitChecker(FileSystemEventHandler):
     self._git_handler = git_handler
     self._repo = Repo('.') if repo is None else repo
     self._events = []
-    self._event_checking = False
     self._last_commits = dict()
     for head in repo.heads:
       self._last_commits[head.name] = head.commit.name_rev
 
+  @use_git
+  def _event_checker(self):
+    if len(self._events) == 0:
+      return
+    self._events = []
+    for head in repo.heads:
+      if head.name == self._git_handler._branch_name:
+        pass
+      elif self._last_commits[head.name] != head.commit.name_rev:
+        self._last_commits[head.name] = head.commit.name_rev
+        self._git_handler.reset_vivi_branch()
+        return
+
   def on_any_event(self, event):
     self._events.append(event)
-    def _event_checker():
-      while(self._event_checking):
-        try:
-          time.sleep(0.1)
-        except:
-          pass
-      self._event_checking = True
-      if len(self._events) == 0:
-        self._event_checking = False
-        return
-      self._events = []
-      for head in repo.heads:
-        if head.name == self._git_handler._branch_name:
-          pass
-        elif self._last_commits[head.name] != head.commit.name_rev:
-          self._last_commits[head.name] = head.commit.name_rev
-          self._git_handler.reset_vivi_branch()
-          self._event_checking = False
-          return
-      self._event_checking = False
-    Timer(self._git_handler._check_interval, _event_checker).start()
+    Timer(self._git_handler._check_interval, self._event_checker).start()
 
 
 if __name__ == "__main__":
